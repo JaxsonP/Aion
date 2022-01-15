@@ -7,11 +7,12 @@ import atexit
 import subprocess
 import multiprocessing as mp
 
+# tokens and ids and stuff
 import constants
 
 
+
 # background vars
-rcv_port = 5000
 start_time = datetime.datetime.now()
 background_processes = []
 pid = os.getpid()
@@ -61,6 +62,7 @@ def exit_handler():
 
 
     # terminating backroung processes
+    print('Terminating background processes...')
     for process in background_processes:
         print(f'- Terminating process: {process}')
         process.kill()
@@ -118,50 +120,33 @@ if __name__ == '__main__':
     import modules 
 
     # starting telegram interface
-    """print("Connecting to telegram interface")
-    tgi_readpipe, tgi_writepipe = mp.Pipe()
-
-    print("Starting telegram interface")
-    tgi_process = process_context.Process(target=telegram_interface.start, args=(tgi_readpipe, tgi_writepipe, 1))
-    tgi_process.start()
-    background_processes.append(tgi_process)
-    print("Waiting for telegram interface to load")
-    while True:
-        if tgi_readpipe.poll(1):
-            print(tgi_readpipe.recv())
-            break"""
     print('Creating connection for telegram interface')
     tg_rcv_pipe, tg_rcv_child_pipe = mp.Pipe()
 
-    print(f'Starting telegram receiver on port {rcv_port}')
-    receive_sms_process = mp_context.Process(target=modules.receive_telegram.start_listener, args=(rcv_port, tg_rcv_child_pipe))
-    background_processes.append(receive_sms_process)
-    receive_sms_process.start()
-    print("Waiting for flask server to go online")
-    time.sleep(1.5)
-
-
-    # starting up the ngrok tunnel
-    print('Starting ngrok localhost tunnel')
-    ngrok_process = subprocess.Popen(['ngrok', 'http', str(rcv_port)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-    background_processes.append(ngrok_process)
-    ngrok_start_time = datetime.datetime.now()
-    time.sleep(2)
+    print(f'Starting telegram receiver')
+    telegram_interface_process = mp_context.Process(target=modules.telegram_interface.start, args=(tg_rcv_child_pipe,))
+    background_processes.append(telegram_interface_process)
+    telegram_interface_process.start()
+    time.sleep(1)
 
 
 
     print(f'{colors.fg.lightgreen}Aion online{colors.reset}')
     logging.info("Online")
 
-    while True:
+    try:
+        while True:
         
-        time.sleep(1/60)
-        """if tgi_readpipe.poll(1):
-            input = tgi_readpipe.recv()
-            print(input)
-            if input == '/shutdown':
-                print('received shutdown from tgi interface')
-                exit()"""
+            if tg_rcv_pipe.poll(1):
+                input = tg_rcv_pipe.recv()
+                if input == '/shutdown':
+                    print(f'{colors.fg.red}Received telegram shutdown command\n{colors.reset}Starting shutdown...')
+                    exit()
+                else:
+                    receive_input(input)
+    except KeyboardInterrupt:
+        print(f'{colors.fg.red}Received KeyboardInterrupt\n{colors.reset}Starting shutdown...')
+        exit()
 
 
 
