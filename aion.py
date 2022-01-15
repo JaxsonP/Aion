@@ -77,17 +77,19 @@ def receive_input (raw_input):
     print(f'{colors.fg.lightcyan}Received input: {colors.reset}{raw_input}{colors.reset}')
     logging.info(f'Received input: {raw_input}')
 
-    """input = raw_input
+    input = raw_input
+
     # null input error
     if len(input) == 0:
-        print(f'null input')
+        print(f'{colors.fg.red}Received null input{colors.reset}')
+        return False
 
     input = input.split(' ')
     if len(input) == 1:
         print(f"short input")
     # lowercasing command
     input[0].lower()
-    #input[1].lower()"""
+    #input[1].lower()
 
     return True
 

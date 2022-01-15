@@ -7,12 +7,11 @@ from telegram.ext import *
 aion_pipe = None
 bot_token = os.environ['AION_BOT_TOKEN']
 chat_id = os.environ['TELEGRAM_CHAT_ID']
-chat = None
+bot = telegram.Bot(bot_token)
 
 def start(_aion_pipe):
-    global aion_pipe, chat
+    global aion_pipe
     aion_pipe = _aion_pipe
-    chat = telegram.Chat(chat_id, 'private')
 
     logging.basicConfig(format='%(asctime)s | %(levelname)s: %(message)s', filename='logs\\telegram_interface.log', level=logging.INFO)
     aps_logger = logging.getLogger('apscheduler')
@@ -31,17 +30,21 @@ def start(_aion_pipe):
 
 def receive_message(update, context):
     print("Received telegram message")
-    #display_typing()
+    display_typing()
     aion_pipe.send(update.message.text)
 
+def send_message(text):
+    bot.send_message(chat_id=chat_id, text=text)
+
 def display_typing():
-    #global bot
-    chat.send_action(chat_id=chat_id, action=telegram.ChatAction.TYPING)
+    global bot
+    bot.send_chat_action(chat_id=chat_id, action=telegram.ChatAction.TYPING)
 
 def error(update, context):
     print("Received Error: ", update)
 
 def shutdown(update, context):
+    send_message('Shutting down Aion...')
     aion_pipe.send('/shutdown')
     aion_pipe.close()
     pass
