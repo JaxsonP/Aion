@@ -7,6 +7,8 @@ import atexit
 import subprocess
 import multiprocessing as mp
 
+import constants
+
 
 # background vars
 rcv_port = 5000
@@ -73,7 +75,7 @@ def receive_input (raw_input):
     print(f'{colors.fg.lightcyan}Received input: {colors.reset}{raw_input}{colors.reset}')
     logging.info(f'Received input: {raw_input}')
 
-    input = raw_input
+    """input = raw_input
     # null input error
     if len(input) == 0:
         print(f'null input')
@@ -83,7 +85,7 @@ def receive_input (raw_input):
         print(f"short input")
     # lowercasing command
     input[0].lower()
-    #input[1].lower()
+    #input[1].lower()"""
 
     return True
 
@@ -104,12 +106,11 @@ if __name__ == '__main__':
     atexit.register(exit_handler)
 
     mp_context = mp.get_context('spawn')
-    #mp.set_start_method('spawn')
 
     #TODO remove
     # setting env vars
-    os.environ['TELEGRAM_CHAT_ID'] = '1948408284'
-    os.environ['AION_BOT_TOKEN'] = "5021950068:AAFeqwg-3dCweyEuOlWvsFYxPIl1sS9nflE"
+    os.environ['TELEGRAM_CHAT_ID'] = constants.telegram_chat_id
+    os.environ['AION_BOT_TOKEN'] = constants.bot_token
 
 
     # importing my modules
