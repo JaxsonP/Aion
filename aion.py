@@ -1,10 +1,12 @@
 # venv\Scripts\activate
 import os
+import sys
+import inspect
 import logging
 import time
 import datetime
 import atexit
-import subprocess
+import pkgutil
 import multiprocessing as mp
 
 # tokens and ids and stuff
@@ -15,6 +17,7 @@ import constants
 # background vars
 start_time = datetime.datetime.now()
 background_processes = []
+active_modules = []
 pid = os.getpid()
 
 class colors:
@@ -72,24 +75,38 @@ def receive_input (raw_input):
     """
     The brain of Aion
     """
-    input = ""
+    global active_modules
 
     print(f'{colors.fg.lightcyan}Received input: {colors.reset}{raw_input}{colors.reset}')
     logging.info(f'Received input: {raw_input}')
 
-    input = raw_input
 
     # null input error
-    if len(input) == 0:
+    if len(raw_input) == 0:
         print(f'{colors.fg.red}Received null input{colors.reset}')
         return False
 
-    input = input.split(' ')
-    if len(input) == 1:
-        print(f"short input")
-    # lowercasing command
-    input[0].lower()
-    #input[1].lower()
+    input = raw_input.split(' ')
+
+    # parsing the module
+    input[0] = input[0].lower()
+    module = None
+    for m in globals().keys():
+        if input[0].replace('_', '') == m.replace('_', ''):
+            print(f'Determined module: {globals()[m]}')
+            module = globals()[m]
+    if module == None: # invalid module
+        print(f"{colors.fg.red}Could not locate module:{colors.reset} {input[0]}")
+        telegram_interface.send_message(f"Invalid module: {input[0]}")
+        return False
+
+    """ if len(input) == 1:
+        print(getattr(globals()["modules"], 'user_functions'))
+        #modules.telegram_interface.send_message(getattr(mymodule, variablename))
+        #modules.telegram_interface.send_message(getattr(globals()[module], 'user_functions'))
+    else:
+        print('bad module')
+        return False"""
 
     return True
 
@@ -119,19 +136,25 @@ if __name__ == '__main__':
 
     # importing my modules
     print('Importing user modules')
-    import modules 
+    from modules import *
 
     # starting telegram interface
     print('Creating connection for telegram interface')
     tg_rcv_pipe, tg_rcv_child_pipe = mp.Pipe()
 
     print(f'Starting telegram receiver')
-    telegram_interface_process = mp_context.Process(target=modules.telegram_interface.start, args=(tg_rcv_child_pipe,))
+    telegram_interface_process = mp_context.Process(target=telegram_interface.start, args=(tg_rcv_child_pipe,))
     background_processes.append(telegram_interface_process)
     telegram_interface_process.start()
     time.sleep(1)
 
-
+    #parsing active modules
+    print(f"Gathering active modules")
+    #modules_path = os.path.dirname(modules.__file__)
+    #active_modules = [name for _, name, _ in pkgutil.iter_modules([modules_path])]
+    #print(f"Found {len(active_modules)} active modules")
+    #print(active_modules)
+    print(globals().keys())
 
     print(f'{colors.fg.lightgreen}Aion online{colors.reset}')
     logging.info("Online")
@@ -149,84 +172,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print(f'{colors.fg.red}Received KeyboardInterrupt\n{colors.reset}Starting shutdown...')
         exit()
-
-
-
-"""print(f'Starting sms receiver on port {rcv_port}')
-    sms_rcv_readpipe, sms_rcv_writepipe = mp.Pipe()
-    receive_sms_process = mp_context.Process(target=receive_sms.start_server, args=(rcv_port, sms_rcv_writepipe))
-    background_processes.append(receive_sms_process)
-    receive_sms_process.start()
-    print("Waiting for flask server to go online")
-    time.sleep(2)
-    # starting up the ngrok tunnel
-    print('Starting ngrok localhost tunnel')
-    ngrok_process = subprocess.Popen(['ngrok', 'http', str(rcv_port)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-    background_processes.append(ngrok_process)
-    ngrok_fallback_process = subprocess.Popen(['ngrok', 'http', str(rcv_port)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-    background_processes.append(ngrok_fallback_process)
-    ngrok_start_time = datetime.datetime.now()
-    time.sleep(2)
-
-    # getting the ngrok urls
-    print('Fetching ngrok public URL')
-    url_request = requests.get("http://127.0.0.1:4040/api/tunnels")
-    url_request_json = json.loads(url_request.content.decode("utf-8"))
-    webhook_url = url_request_json["tunnels"][0]["public_url"]
-    print(f'- Public URL: {webhook_url}')
-    url_request = requests.get("http://127.0.0.1:4041/api/tunnels")
-    url_request_json = json.loads(url_request.content.decode("utf-8"))
-    fallback_webhook_url = url_request_json["tunnels"][0]["public_url"]
-    print(f'- Fallback public URL: {fallback_webhook_url}')
-
-    # giving url to twilio
-    receive_sms.set_webhook_url(webhook_url)
-    receive_sms.set_webhook_url(fallback_webhook_url, fallback=True)"""
-
-
-"""# checking if sms message has been received
-        if sms_rcv_readpipe.poll(1):
-            receive_input(sms_rcv_readpipe.recv(), 'sms')
-
-        # checking if ngrok needs to be refreshed
-        if (datetime.datetime.now() - ngrok_start_time).seconds >= ngrok_refresh_rate * 60:
-            print(f"{colors.fg.yellow}Renewing ngrok connection{colors.reset}")
-            logging.debug('Renewing ngrok')
-            # terminating current ngrok processs
-            for process in background_processes:
-                if process.pid == ngrok_process.pid:
-                    print("Terminating old ngrok session")
-                    process.terminate()
-                    background_processes.remove(process)
-                    break
-            for process in background_processes:
-                if process.pid == ngrok_fallback_process.pid:
-                    print("Terminating old fallback ngrok session")
-                    process.terminate()
-                    background_processes.remove(process)
-                    break
-
-            # starting ngrok
-            print('Starting new ngrok tunnel')
-            ngrok_process = subprocess.Popen(['ngrok', 'http', str(rcv_port)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-            background_processes.append(ngrok_process)
-            ngrok_fallback_process = subprocess.Popen(['ngrok', 'http', str(rcv_port)], creationflags=subprocess.CREATE_NEW_CONSOLE)
-            background_processes.append(ngrok_fallback_process)
-            ngrok_start_time = datetime.datetime.now()
-            time.sleep(2)
-
-            # getting the ngrok urls
-            print('Fetching new public URLs')
-            url_request = requests.get("http://127.0.0.1:4040/api/tunnels")
-            url_request_json = json.loads(url_request.content.decode("utf-8"))
-            webhook_url = url_request_json["tunnels"][0]["public_url"]
-            print(f'- Public URL: {webhook_url}')
-            url_request = requests.get("http://127.0.0.1:4041/api/tunnels")
-            url_request_json = json.loads(url_request.content.decode("utf-8"))
-            fallback_webhook_url = url_request_json["tunnels"][0]["public_url"]
-            print(f'- Fallback public URL: {fallback_webhook_url}')
-
-            # sendin em to twilio
-            receive_sms.set_webhook_url(webhook_url)
-            receive_sms.set_webhook_url(fallback_webhook_url, fallback=True)
-            print(f"{colors.fg.lightgreen}Aion back online{colors.reset}")"""
