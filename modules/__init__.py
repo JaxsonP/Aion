@@ -7,7 +7,7 @@ __all__ = []
 for file in modules:
     if isfile(file) and not file.endswith('__init__.py') and not basename(file)[:-3] in __all__:
         __all__.append(basename(file)[:-3])
-        print(f"- Importing {file}")
+        #print(f"- Importing {file}")
 
 
 from . import *

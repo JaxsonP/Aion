@@ -1,7 +1,5 @@
 # venv\Scripts\activate
 import os
-import sys
-import inspect
 import logging
 import time
 import datetime
@@ -13,11 +11,10 @@ import multiprocessing as mp
 import constants
 
 
-
 # background vars
 start_time = datetime.datetime.now()
 background_processes = []
-active_modules = []
+active_modules = {}
 pid = os.getpid()
 
 class colors:
@@ -62,6 +59,7 @@ def exit_handler():
     # on exit do this stuff
     print(f'{colors.fg.lightgreen}Exiting Aion{colors.reset}')
     logging.info("Exiting")
+    modules.telegram_interface.send_message("Aion shutting down...")
 
 
     # terminating backroung processes
@@ -86,27 +84,43 @@ def receive_input (raw_input):
         print(f'{colors.fg.red}Received null input{colors.reset}')
         return False
 
+    # commands
+    if raw_input == '/help':
+        modules.telegram_interface.send_message("Available modules:")
+        msg = ""
+        for m in active_modules:
+            msg += f'\n- {m}'
+        modules.telegram_interface.send_message(msg)
+        return True
+    elif raw_input == '/shutdown':
+        print(f'{colors.fg.red}Received telegram shutdown command\n{colors.reset}Starting shutdown...')
+        exit()
+
     input = raw_input.split(' ')
 
     # parsing the module
     input[0] = input[0].lower()
     module = None
-    for m in globals().keys():
-        if input[0].replace('_', '') == m.replace('_', ''):
-            print(f'Determined module: {globals()[m]}')
-            module = globals()[m]
-    if module == None: # invalid module
+    if input[0].replace('_', '') in [x.replace('_', '') for x in active_modules]:
+        print(f'Determined module: {getattr(modules, input[0])}')
+        module = getattr(modules, input[0])
+    else: 
+        
+        # invalid module
         print(f"{colors.fg.red}Could not locate module:{colors.reset} {input[0]}")
-        telegram_interface.send_message(f"Invalid module: {input[0]}")
+        modules.telegram_interface.send_message(f"Could not locate module: {input[0]}")
+        modules.telegram_interface.send_message(f"Use the /help command to get a list of modules")
         return False
 
-    """ if len(input) == 1:
-        print(getattr(globals()["modules"], 'user_functions'))
-        #modules.telegram_interface.send_message(getattr(mymodule, variablename))
-        #modules.telegram_interface.send_message(getattr(globals()[module], 'user_functions'))
-    else:
-        print('bad module')
-        return False"""
+    # asking about functions from a module
+    if len(input) == 1 or input[1].lower() == 'help':
+        modules.telegram_interface.send_message(f"Available functions in module \'{input[0]}\':")
+        msg = ""
+        for x in dir(module):
+            if callable(getattr(module, x)):
+                msg += f'- {x}\n'
+        modules.telegram_interface.send_message(msg)
+        return True
 
     return True
 
@@ -136,39 +150,35 @@ if __name__ == '__main__':
 
     # importing my modules
     print('Importing user modules')
-    from modules import *
+    import modules
 
     # starting telegram interface
     print('Creating connection for telegram interface')
     tg_rcv_pipe, tg_rcv_child_pipe = mp.Pipe()
 
     print(f'Starting telegram receiver')
-    telegram_interface_process = mp_context.Process(target=telegram_interface.start, args=(tg_rcv_child_pipe,))
+    telegram_interface_process = mp_context.Process(target=modules.telegram_interface.start, args=(tg_rcv_child_pipe,))
     background_processes.append(telegram_interface_process)
     telegram_interface_process.start()
     time.sleep(1)
 
     #parsing active modules
     print(f"Gathering active modules")
-    #modules_path = os.path.dirname(modules.__file__)
-    #active_modules = [name for _, name, _ in pkgutil.iter_modules([modules_path])]
-    #print(f"Found {len(active_modules)} active modules")
-    #print(active_modules)
-    print(globals().keys())
+    modules_path = os.path.dirname(modules.__file__)
+    for x in pkgutil.iter_modules([modules_path]):
+        active_modules[x[1]] = [x[0]]
+    print(f"Found {len(active_modules)} active modules")
+    print(active_modules.keys())
 
     print(f'{colors.fg.lightgreen}Aion online{colors.reset}')
     logging.info("Online")
+    modules.telegram_interface.send_message('Aion online')
 
     try:
         while True:
         
             if tg_rcv_pipe.poll(1):
-                input = tg_rcv_pipe.recv()
-                if input == '/shutdown':
-                    print(f'{colors.fg.red}Received telegram shutdown command\n{colors.reset}Starting shutdown...')
-                    exit()
-                else:
-                    receive_input(input)
+                receive_input(tg_rcv_pipe.recv())
     except KeyboardInterrupt:
         print(f'{colors.fg.red}Received KeyboardInterrupt\n{colors.reset}Starting shutdown...')
         exit()
