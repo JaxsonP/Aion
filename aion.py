@@ -5,6 +5,7 @@ import time
 import datetime
 import atexit
 import pkgutil
+from inspect import Parameter, signature
 import multiprocessing as mp
 
 # tokens and ids and stuff
@@ -59,15 +60,14 @@ def exit_handler():
     # on exit do this stuff
     print(f'{colors.fg.lightgreen}Exiting Aion{colors.reset}')
     logging.info("Exiting")
-    modules.telegram_interface.send_message("Aion shutting down...")
 
-
-    # terminating backroung processes
+    # terminating backround processes
     print('Terminating background processes...')
     for process in background_processes:
         print(f'- Terminating process: {process}')
         process.kill()
-
+    
+    modules.telegram_interface.send_message("Aion offline")
 
 def receive_input (raw_input):
     """
@@ -78,12 +78,10 @@ def receive_input (raw_input):
     print(f'{colors.fg.lightcyan}Received input: {colors.reset}{raw_input}{colors.reset}')
     logging.info(f'Received input: {raw_input}')
 
-
-    # null input error
+    # null input case
     if len(raw_input) == 0:
         print(f'{colors.fg.red}Received null input{colors.reset}')
         return False
-
     # commands
     if raw_input == '/help':
         modules.telegram_interface.send_message("Available modules:")
@@ -102,7 +100,7 @@ def receive_input (raw_input):
     input[0] = input[0].lower()
     module = None
     if input[0].replace('_', '') in [x.replace('_', '') for x in active_modules]:
-        print(f'Determined module: {getattr(modules, input[0])}')
+        print(f'- Module: {getattr(modules, input[0])}')
         module = getattr(modules, input[0])
     else: 
         
@@ -122,6 +120,56 @@ def receive_input (raw_input):
         modules.telegram_interface.send_message(msg)
         return True
 
+    # getting the function
+    f = getattr(module, input[1])
+    print(f'- function: {f}')
+
+    # getting the parameters
+    f_sig = signature(f)
+    expected_params = []
+    all_params = f_sig.parameters
+    for x in all_params.keys():
+        # if parameter doesn't have default values
+        if all_params[x].default == Parameter.empty:
+            expected_params.append(x)
+    print(f'- Parameters: {expected_params}')
+
+    # getting parameter input
+    params = []
+    for i in range(len(expected_params)):
+        modules.telegram_interface.send_message(f"Input for \'{expected_params[i]}\'?")
+
+        # waiting for param
+        print('- Waiting for input for parameter: ' + expected_params[i])
+        while True:
+            if tg_rcv_pipe.poll(1 / 60):
+                params.append(tg_rcv_pipe.recv())
+                print('- ' + str(params[-1]))
+                break
+    
+    print("Executing function")
+    result = f(*params)
+    print(f'Result: {result}')
+    if result == True:
+        modules.telegram_interface.send_message("🤙  ")
+
+    """if len(expected_params) == len(input) - 2:
+        print("Executing function")
+        result = f(*params)
+        print(f'Result: {result}')
+        if result != None:
+            modules.telegram_interface.send_message("Successfully executed")
+            modules.telegram_interface.send_message(f"Result: {result}")
+    else:
+        modules.telegram_interface.send_message(f"Expected {len(expected_params)} parameters but received {len(params)}")
+        modules.telegram_interface.send_message(f"{module.__name__}.{input[1]} expects the following parameters:")
+        p = ""
+        for x in all_params.keys():
+            p += f'- {x}'
+            if all_params[x].default != Parameter.empty:
+                p += f' (default={all_params[x].default})'
+            p += '\n'
+        modules.telegram_interface.send_message(p)"""
     return True
 
 
@@ -167,8 +215,8 @@ if __name__ == '__main__':
     modules_path = os.path.dirname(modules.__file__)
     for x in pkgutil.iter_modules([modules_path]):
         active_modules[x[1]] = [x[0]]
-    print(f"Found {len(active_modules)} active modules")
-    print(active_modules.keys())
+    print(f"Collected {len(active_modules)} active modules")
+    [print(f'- {s}') for s in active_modules.keys()]
 
     print(f'{colors.fg.lightgreen}Aion online{colors.reset}')
     logging.info("Online")

@@ -2,7 +2,7 @@ import os
 import time
 import logging
 import telegram
-#from telegram.ext import *
+from telegram.ext import Updater
 
 aion_pipe = None
 bot_token = os.environ['AION_BOT_TOKEN']
@@ -18,13 +18,10 @@ def start(_aion_pipe):
     aps_logger.setLevel(logging.WARNING)
 
 
-    updater = telegram.ext.Updater(bot_token, use_context=True)
+    updater = Updater(bot_token, use_context=True)
     dispatcher = updater.dispatcher
 
-    #dispatcher.add_handler(telegram.ext.CommandHandler("shutdown", shutdown))
-    #dispatcher.add_handler(telegram.ext.CommandHandler("help", help))
     dispatcher.add_handler(telegram.ext.MessageHandler(telegram.ext.Filters.text, receive_message))
-    #dispatcher.add_error_handler(error, True)
 
     updater.start_polling()
     updater.idle()
